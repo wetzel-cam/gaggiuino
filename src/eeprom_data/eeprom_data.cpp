@@ -1,5 +1,9 @@
-#define STM32F4 // This define has to be here otherwise the include of FlashStorage_STM32.h bellow fails.
-#include <FlashStorage_STM32.h>
+#ifdef ESP32
+#else
+  #define STM32F4 // This define has to be here otherwise the include of FlashStorage_STM32.h bellow fails.
+  #include <FlashStorage_STM32.h>
+#endif
+
 #include "eeprom_data.h"
 #include "eeprom_metadata.h"
 #include "legacy/eeprom_data_v4.h"
@@ -200,7 +204,12 @@ bool eepromWrite(eepromValues_t eepromValuesNew) {
   eepromMetadata.version = EEPROM_DATA_VERSION;
   eepromMetadata.values = eepromValuesNew;
   eepromMetadata.versionTimestampXOR = eepromMetadata.timestamp ^ eepromMetadata.version;
-  EEPROM.put(0, eepromMetadata);
+
+  #ifdef ESP32
+    pref.putBytes("gaggiuino", &eepromMetadata, sizeof(eepromMetadata_t));
+  #else
+    EEPROM.put(0, eepromMetadata);
+  #endif
 
   return true;
 }
@@ -211,7 +220,14 @@ void eepromInit(void) {
 
   // read version
   uint16_t version;
-  EEPROM.get(0, version);
+  #ifdef ESP32
+    size_t dataLength = pref.getBytesLength("gaggiuino");
+    char buffer[dataLength];
+    pref.getBytes("gaggiuino", buffer, dataLength);
+    version = ((eepromMetadata_t *) buffer)->version;
+  #else
+    EEPROM.get(0, version);
+  #endif
 
   // load appropriate version (including current)
   bool readSuccess = false;

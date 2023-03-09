@@ -3,6 +3,11 @@
 
 #include <Arduino.h>
 
+#ifdef ESP32
+  #include <Preferences.h>
+  Preferences pref;
+#endif
+
 #define EEPROM_DATA_VERSION 6
 
 #define EEPROM_METADATA_T(__eepromValues_tName) \
@@ -15,18 +20,35 @@
 
 struct eepromMetadata_t EEPROM_METADATA_T(eepromValues_t);
 
-#define EEPROM_METADATA_LOADER(__eepromDataVersion, __eepromMetadata_tName, __upgradeSchema_fName)  \
-  (eepromValues_t & targetValues)                                                                   \
-  {                                                                                                 \
-    __eepromMetadata_tName eepromMetadata;                                                          \
-    EEPROM.get(0, eepromMetadata);                                                                  \
-    uint32_t XOR = eepromMetadata.timestamp ^ eepromMetadata.version;                               \
-    if (eepromMetadata.version != __eepromDataVersion || eepromMetadata.versionTimestampXOR != XOR) \
-    {                                                                                               \
-      return false;                                                                                 \
-    }                                                                                               \
-    return __upgradeSchema_fName(targetValues, eepromMetadata.values);                              \
-  }
+#ifdef ESP32
+  #define EEPROM_METADATA_LOADER(__eepromDataVersion, __eepromMetadata_tName, __upgradeSchema_fName)    \
+    (eepromValues_t & targetValues)                                                                     \
+    {                                                                                                   \
+      size_t dataLength = pref.getBytesLength("gaggiuino");                                             \
+      char buffer[dataLength];                                                                          \
+      pref.getBytes("gaggiuino", buffer, dataLength);                                                   \
+      __eepromMetadata_tName *eepromMetadata = (__eepromMetadata_tName *) buffer;                       \
+      uint32_t XOR = eepromMetadata->timestamp ^ eepromMetadata->version;                               \
+      if (eepromMetadata->version != __eepromDataVersion || eepromMetadata->versionTimestampXOR != XOR) \
+      {                                                                                                 \
+        return false;                                                                                   \
+      }                                                                                                 \
+      return __upgradeSchema_fName(targetValues, eepromMetadata->values);                               \
+    }                                                                                                 
+#else
+  #define EEPROM_METADATA_LOADER(__eepromDataVersion, __eepromMetadata_tName, __upgradeSchema_fName)  \
+    (eepromValues_t & targetValues)                                                                   \
+    {                                                                                                 \
+      __eepromMetadata_tName eepromMetadata;                                                          \
+      EEPROM.get(0, eepromMetadata);                                                                  \
+      uint32_t XOR = eepromMetadata.timestamp ^ eepromMetadata.version;                               \
+      if (eepromMetadata.version != __eepromDataVersion || eepromMetadata.versionTimestampXOR != XOR) \
+      {                                                                                               \
+        return false;                                                                                 \
+      }                                                                                               \
+      return __upgradeSchema_fName(targetValues, eepromMetadata.values);                              \
+    }                                                                                                 
+#endif
 
 bool (*legacyEepromDataLoaders[EEPROM_DATA_VERSION])(eepromValues_t &);
 
